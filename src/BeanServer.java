@@ -1,13 +1,49 @@
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Scanner;
-import java.util.StringTokenizer;
 
-public class BeanServer implements Runnable
+class BeanConnection implements BeanCallback
 {
+    protected BeanServer Server;
+
     protected Socket _Socket;
 
     protected IOStreamPair Streams;
+
+    @Override
+    public void run()
+    {
+        StringBuilder builder = new StringBuilder();
+
+        String buffer;
+
+        try
+        {
+            builder.append(this.Streams.InputStream.readUTF());
+        } catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
+
+        buffer = builder.toString();
+
+        System.out.println(buffer);
+    }
+
+    public BeanConnection(Socket socket, BeanServer server) throws IOException
+    {
+        this._Socket = socket;
+        this.Server = server;
+        this.Streams = new IOStreamPair(new DataInputStream(this._Socket.getInputStream()), new DataOutputStream(this._Socket.getOutputStream()));
+    }
+}
+
+public class BeanServer
+{
+    protected ServerSocket _Socket;
+
+    protected  BeanCallback OnReceivedCallback;
 
     protected boolean Running;
 
@@ -16,32 +52,30 @@ public class BeanServer implements Runnable
         return this.Running;
     }
 
-    public BeanServer(String address, int port) throws IOException
+    public BeanServer(int port) throws IOException
     {
-        this._Socket = new Socket(address, port);
-        this.Streams = new IOStreamPair((DataInputStream) this._Socket.getInputStream(), (DataOutputStream) this._Socket.getOutputStream());
+        this._Socket = new ServerSocket(port);
+
         this.Running = false;
     }
 
-    @Override
-    public void run()
+
+    public void SetOnReceivedCallback(BeanCallback callback)
     {
-        Scanner scanner = new Scanner(this.Streams.InputStream);
+        this.OnReceivedCallback = callback;
+    }
 
-        StringBuilder stringBuilder = new StringBuilder();
+    public void Start() throws IOException
+    {
+        this.Running = true;
 
-        String buffer = null;
+        System.out.println(this._Socket.getLocalSocketAddress());
 
         while (this.Running)
         {
-            while (scanner.hasNext())
-                stringBuilder.append(scanner.next());
-            buffer = stringBuilder.toString();
+            Socket socket = this._Socket.accept();
 
-            System.out.println(buffer);
-
-            stringBuilder.delete(0, stringBuilder.length());
+            new Thread(new BeanConnection(socket, this)).start();
         }
-
     }
 }
